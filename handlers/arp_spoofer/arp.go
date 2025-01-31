@@ -56,6 +56,7 @@ func (config Config) New(session *packet.Session) (h *Handler, err error) {
 		return nil, packet.ErrInvalidIP
 	}
 	h.probeInterval = config.ProbeInterval
+	h.scanInterval = config.ScanInterval
 
 	return h, nil
 }
@@ -236,11 +237,8 @@ func (h *Handler) Scan() error {
 	ip := h.session.NICInfo.HomeLAN4.Addr()
 	n := (uint32(0xffffffff) << uint32(h.session.NICInfo.HomeLAN4.Bits())) >> h.session.NICInfo.HomeLAN4.Bits()
 
-	var ticker *time.Ticker
-	if h.scanInterval != 0 {
-		ticker = time.NewTicker(h.scanInterval / time.Duration(n))
-		defer ticker.Stop()
-	}
+	interval := h.scanInterval / time.Duration(n)
+	start := time.Now()
 
 	for host := uint32(1); host < n; host++ {
 		ip = ip.Next()
@@ -267,9 +265,12 @@ func (h *Handler) Scan() error {
 			}
 			return err
 		}
-		if h.scanInterval != 0 {
-			<-ticker.C
+
+		elapsed := time.Now().Sub(start)
+		if elapsed < interval {
+			time.Sleep(interval - elapsed)
 		}
+		start = start.Add(interval)
 	}
 	return nil
 }
