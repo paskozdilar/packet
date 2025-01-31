@@ -1,4 +1,16 @@
 # packet
+
+***NOTE: This repository is a fork of
+[irai/packet](https://github.com/irai/packet)
+made for the purposes of
+[patching an implicit dependency](https://github.com/irai/packet/pull/14) and
+will NOT be maintained. As soon as the PR is accepted, this repository will be
+deleted.***
+
+***If you want to use this code, use irai/packet.***
+
+---
+
 Implements layer 2, IPv4, IPv6, UDP, TCP and application level packet processing.
 
 The motivation for this package is to enable fast, memory efficient
