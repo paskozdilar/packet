@@ -26,6 +26,7 @@ type Handler struct {
 	arpMutex      sync.RWMutex
 	session       *packet.Session
 	probeInterval time.Duration // how often to probe if IP is online
+	scanInterval  time.Duration // how often to run Scan on all IPs in the LAN
 	huntList      map[string]packet.Addr
 	closed        bool
 	closeChan     chan bool
@@ -33,6 +34,7 @@ type Handler struct {
 
 type Config struct {
 	ProbeInterval time.Duration
+	ScanInterval  time.Duration
 }
 
 const module = "arp"
@@ -148,7 +150,9 @@ func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err err
 // i.e. unicast polling check for stale ARP entries; useful to test online/offline state
 //
 // ARP: packet types
-//      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
+//
+//	note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
+//
 // +============+===+===========+===========+============+============+===================+===========+
 // | Type       | op| etherDST  | etherSRC  | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
 // +============+===+===========+===========+============+============+===================+===========+
@@ -158,7 +162,6 @@ func (h *Handler) AnnounceTo(dst net.HardwareAddr, targetIP netip.Addr) (err err
 // | ACD probe  | 1 | broadcast | hostMAC   | clientMAC  | 0x00       | 0x00              |  targetIP |
 // | ACD announ | 1 | broadcast | hostMAC   | clientMAC  | clientIP   | ff:ff:ff:ff:ff:ff |  clientIP |
 // +============+===+===========+===========+============+============+===================+===========+
-//
 func (h *Handler) RequestRaw(dst net.HardwareAddr, sender packet.Addr, target packet.Addr) (err error) {
 	b := packet.EtherBufferPool.Get().(*[packet.EthMaxSize]byte)
 	defer packet.EtherBufferPool.Put(b)
@@ -206,9 +209,7 @@ func (h *Handler) reply(dst net.HardwareAddr, sender packet.Addr, target packet.
 }
 
 // WhoIs will send a request packet to get the MAC address for the IP. Retry 3 times.
-//
 func (h *Handler) WhoIs(ip netip.Addr) (packet.Addr, error) {
-
 	for i := 0; i < 3; i++ {
 		if host := h.session.FindIP(ip); host != nil {
 			return packet.Addr{IP: host.Addr.IP, MAC: host.MACEntry.MAC}, nil
@@ -226,10 +227,21 @@ func (h *Handler) WhoIs(ip netip.Addr) (packet.Addr, error) {
 	return packet.Addr{}, packet.ErrNotFound
 }
 
-// ScanNetwork sends 256 arp requests to identify IPs on the lan
+// Scan sends arp requests to identify IPs on the lan, excluding the host,
+// router and broadcast. Number of requests is equal to `n = 2^bits - 3`, where
+// `bits` is the number of bits in the netmask.
+// Scan sleeps for `scanInterval/n` between each request. Therefore, running
+// scan in an infinite loop will scan the entire network each `scanInterval`.
 func (h *Handler) Scan() error {
 	ip := h.session.NICInfo.HomeLAN4.Addr()
 	n := (uint32(0xffffffff) << uint32(h.session.NICInfo.HomeLAN4.Bits())) >> h.session.NICInfo.HomeLAN4.Bits()
+
+	var ticker *time.Ticker
+	if h.scanInterval != 0 {
+		ticker = time.NewTicker(h.scanInterval / time.Duration(n))
+		defer ticker.Stop()
+	}
+
 	for host := uint32(1); host < n; host++ {
 		ip = ip.Next()
 
@@ -255,7 +267,9 @@ func (h *Handler) Scan() error {
 			}
 			return err
 		}
-		time.Sleep(time.Millisecond * 8)
+		if h.scanInterval != 0 {
+			<-ticker.C
+		}
 	}
 	return nil
 }
@@ -263,7 +277,9 @@ func (h *Handler) Scan() error {
 // ProcessPacket process an ARP packet
 //
 // ARP: packet types
-//      note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
+//
+//	note that RFC 3927 specifies 00:00:00:00:00:00 for Request TargetMAC
+//
 // +============+===+===========+===========+============+============+===================+===========+
 // | Type       | op| EthDstMAC | EthSRCMAC | SenderMAC  | SenderIP   | TargetMAC         |  TargetIP |
 // +============+===+===========+===========+============+============+===================+===========+
