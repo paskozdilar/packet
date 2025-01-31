@@ -26,6 +26,7 @@ type Handler struct {
 	arpMutex      sync.RWMutex
 	session       *packet.Session
 	probeInterval time.Duration // how often to probe if IP is online
+	scanInterval  time.Duration // how often to run Scan on all IPs in the LAN
 	huntList      map[string]packet.Addr
 	closed        bool
 	closeChan     chan bool
@@ -33,6 +34,7 @@ type Handler struct {
 
 type Config struct {
 	ProbeInterval time.Duration
+	ScanInterval  time.Duration
 }
 
 const module = "arp"
@@ -226,10 +228,21 @@ func (h *Handler) WhoIs(ip netip.Addr) (packet.Addr, error) {
 	return packet.Addr{}, packet.ErrNotFound
 }
 
-// ScanNetwork sends 256 arp requests to identify IPs on the lan
+// Scan sends arp requests to identify IPs on the lan, excluding the host,
+// router and broadcast. Number of requests is equal to `n = 2^bits - 3`, where
+// `bits` is the number of bits in the netmask.
+// Scan sleeps for `scanInterval/n` between each request. Therefore, running
+// scan in an infinite loop will scan the entire network each `scanInterval`.
 func (h *Handler) Scan() error {
 	ip := h.session.NICInfo.HomeLAN4.Addr()
 	n := (uint32(0xffffffff) << uint32(h.session.NICInfo.HomeLAN4.Bits())) >> h.session.NICInfo.HomeLAN4.Bits()
+
+	var ticker *time.Ticker
+	if h.scanInterval != 0 {
+		ticker = time.NewTicker(h.scanInterval / time.Duration(n))
+	}
+
+	defer ticker.Stop()
 	for host := uint32(1); host < n; host++ {
 		ip = ip.Next()
 
@@ -255,7 +268,9 @@ func (h *Handler) Scan() error {
 			}
 			return err
 		}
-		time.Sleep(time.Millisecond * 8)
+		if h.scanInterval != 0 {
+			<-ticker.C
+		}
 	}
 	return nil
 }
