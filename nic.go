@@ -119,11 +119,11 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 		Logger.Msg("warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
-	defaultGW, err := GetIP4DefaultGatewayAddr(nic)
-	if err != nil {
-		return nil, err
-	}
-	info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP}
+	// defaultGW, err := GetIP4DefaultGatewayAddr(nic)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP}
 	info.HostAddr4 = Addr{MAC: info.IFI.HardwareAddr, IP: info.HostAddr4.IP}
 	return info, nil
 }
@@ -151,10 +151,10 @@ const (
 // GetLinuxDefaultGateway read the default gateway from linux route file
 //
 // file: /proc/net/route file:
-//   Iface   Destination Gateway     Flags   RefCnt  Use Metric  Mask
-//   eth0    00000000    C900A8C0    0003    0   0   100 00000000    0   00
-//   eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 //
+//	Iface   Destination Gateway     Flags   RefCnt  Use Metric  Mask
+//	eth0    00000000    C900A8C0    0003    0   0   100 00000000    0   00
+//	eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 func GetLinuxDefaultGateway() (gw netip.Addr, err error) {
 	file, err := os.Open(file)
 	if err != nil {
@@ -188,11 +188,11 @@ func GetLinuxDefaultGateway() (gw netip.Addr, err error) {
 // LoadLinuxARPTable read arp entries from linux proc file
 //
 // /proc/net/arp format:
-//   IP address       HW type     Flags       HW address            Mask     Device
-//   192.168.0.1      0x1         0x2         20:0c:c8:23:f7:1a     *        eth0
-//   192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
-//   192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 //
+//	IP address       HW type     Flags       HW address            Mask     Device
+//	192.168.0.1      0x1         0x2         20:0c:c8:23:f7:1a     *        eth0
+//	192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
+//	192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 	const name = "/proc/net/arp"
 
@@ -235,7 +235,6 @@ func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 
 // GetIP4DefaultGatewayAddr return the IP4 default gatewy for nic
 func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
-
 	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
 		fmt.Println("error getting router ", err)
 		return Addr{}, ErrInvalidIP
