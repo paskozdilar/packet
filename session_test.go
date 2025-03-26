@@ -20,9 +20,8 @@ func testSession() (*Session, net.PacketConn) {
 	homeLAN := netip.PrefixFrom(ip1, 24)
 	// routerIP := net.ParseIP("192.168.0.11").To4()
 	nicInfo := &NICInfo{
-		HomeLAN4:    homeLAN,
-		HostAddr4:   Addr{MAC: hostMAC, IP: hostIP4},
-		RouterAddr4: Addr{MAC: routerMAC, IP: routerIP4},
+		HomeLAN4:  homeLAN,
+		HostAddr4: Addr{MAC: hostMAC, IP: hostIP4},
 	}
 
 	// TODO: fix this to discard writes like ioutil.Discard
@@ -105,15 +104,13 @@ func TestSession_Notify(t *testing.T) {
 	case notification := <-session.C:
 		t.Error("unexpected final notification", notification)
 	}
-
 }
 
 func TestHandler_SignalNICStopped(t *testing.T) {
 	Logger.SetLevel(fastlog.LevelDebug)
 	nicInfo := NICInfo{
-		RouterAddr4: Addr{MAC: routerMAC, IP: routerIP4},
-		HostAddr4:   Addr{MAC: hostMAC, IP: hostIP4},
-		HomeLAN4:    homeLAN,
+		HostAddr4: Addr{MAC: hostMAC, IP: hostIP4},
+		HomeLAN4:  homeLAN,
 	}
 	inConn, _ := TestNewBufferedConn()
 
@@ -278,20 +275,34 @@ func TestSession_DHCPUpdate(t *testing.T) {
 		hostTable int
 		macTable  int
 	}{
-		{name: "mac1_existinghost", wantErr: false, addr: Addr{MAC: mac1, IP: ip1}, dhcpName: "mac1",
-			wantName: "mac1", wantAddr: Addr{MAC: mac1, IP: ip1}, hostTable: 3, macTable: 4},
-		{name: "mac2_newhost", wantErr: false, addr: Addr{MAC: mac2, IP: ip2}, dhcpName: "mac2",
-			wantName: "mac2", wantAddr: Addr{MAC: mac2, IP: ip2}, hostTable: 4, macTable: 5},
-		{name: "mac3_newcapturedhost", wantErr: false, addr: Addr{MAC: mac3, IP: ip3}, dhcpName: "mac3",
-			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip3}, hostTable: 5, macTable: 5},
-		{name: "mac1_dup", wantErr: false, addr: Addr{MAC: mac1, IP: ip1}, dhcpName: "mac1",
-			wantName: "mac1", wantAddr: Addr{MAC: mac1, IP: ip1}, hostTable: 5, macTable: 5},
-		{name: "mac3_dup", wantErr: false, addr: Addr{MAC: mac3, IP: ip3}, dhcpName: "mac3",
-			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip3}, hostTable: 5, macTable: 5},
-		{name: "mac3_newip", wantErr: false, addr: Addr{MAC: mac3, IP: ip4}, dhcpName: "mac3",
-			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip4}, hostTable: 6, macTable: 5},
-		{name: "mac4_conflictip", wantErr: false, addr: Addr{MAC: mac4, IP: ip4}, dhcpName: "mac4",
-			wantName: "mac4", wantAddr: Addr{MAC: mac4, IP: ip4}, hostTable: 6, macTable: 6},
+		{
+			name: "mac1_existinghost", wantErr: false, addr: Addr{MAC: mac1, IP: ip1}, dhcpName: "mac1",
+			wantName: "mac1", wantAddr: Addr{MAC: mac1, IP: ip1}, hostTable: 3, macTable: 4,
+		},
+		{
+			name: "mac2_newhost", wantErr: false, addr: Addr{MAC: mac2, IP: ip2}, dhcpName: "mac2",
+			wantName: "mac2", wantAddr: Addr{MAC: mac2, IP: ip2}, hostTable: 4, macTable: 5,
+		},
+		{
+			name: "mac3_newcapturedhost", wantErr: false, addr: Addr{MAC: mac3, IP: ip3}, dhcpName: "mac3",
+			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip3}, hostTable: 5, macTable: 5,
+		},
+		{
+			name: "mac1_dup", wantErr: false, addr: Addr{MAC: mac1, IP: ip1}, dhcpName: "mac1",
+			wantName: "mac1", wantAddr: Addr{MAC: mac1, IP: ip1}, hostTable: 5, macTable: 5,
+		},
+		{
+			name: "mac3_dup", wantErr: false, addr: Addr{MAC: mac3, IP: ip3}, dhcpName: "mac3",
+			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip3}, hostTable: 5, macTable: 5,
+		},
+		{
+			name: "mac3_newip", wantErr: false, addr: Addr{MAC: mac3, IP: ip4}, dhcpName: "mac3",
+			wantName: "mac3", wantAddr: Addr{MAC: mac3, IP: ip4}, hostTable: 6, macTable: 5,
+		},
+		{
+			name: "mac4_conflictip", wantErr: false, addr: Addr{MAC: mac4, IP: ip4}, dhcpName: "mac4",
+			wantName: "mac4", wantAddr: Addr{MAC: mac4, IP: ip4}, hostTable: 6, macTable: 6,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

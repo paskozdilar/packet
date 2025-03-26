@@ -225,7 +225,7 @@ func (h *Session) Parse(p []byte) (frame Frame, err error) {
 		// If we don't have this, then we received all sent and forwarded packets with client IPs containing our host mac
 		if !bytes.Equal(frame.SrcAddr.MAC, h.NICInfo.HostAddr4.MAC) &&
 			(frame.SrcAddr.IP.IsLinkLocalUnicast() ||
-				(frame.SrcAddr.IP.IsGlobalUnicast() && !bytes.Equal(frame.SrcAddr.MAC, frame.Session.NICInfo.RouterAddr4.MAC))) {
+				(frame.SrcAddr.IP.IsGlobalUnicast())) {
 			frame.Host, _ = frame.Session.findOrCreateHostWithLock(frame.SrcAddr) // will lock/unlock
 			if !frame.Host.Online {
 				frame.Session.onlineTransition(frame.Host)

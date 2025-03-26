@@ -149,6 +149,7 @@ func (p ICMP4Redirect) Checksum() uint16 { return binary.BigEndian.Uint16(p[2:4]
 func (p ICMP4Redirect) NumAddrs() uint8  { return p[4] }
 func (p ICMP4Redirect) AddrSize() uint8  { return p[5] } // The number of 32-bit words per each router address (ie. 2 for IP4)
 func (p ICMP4Redirect) Lifetime() uint16 { return binary.BigEndian.Uint16(p[6:8]) }
+
 func (p ICMP4Redirect) Addrs() []net.IP {
 	addr := make([]net.IP, 0, p.NumAddrs())
 	for i := 0; i < int(p.NumAddrs()); i++ {
@@ -247,21 +248,26 @@ func (p ICMP6RouterAdvertisement) Preference() byte           { return (p[5] & 0
 func (p ICMP6RouterAdvertisement) ProxyFlag() bool            { return (p[5] & 0x04) != 0 } // Experimental ND proxy - proxy ARP like???
 func (p ICMP6RouterAdvertisement) Flags() byte                { return p[5] }               // All flags
 func (p ICMP6RouterAdvertisement) Lifetime() (seconds uint16) { return binary.BigEndian.Uint16(p[6:8]) }
+
 func (p ICMP6RouterAdvertisement) ReachableTime() (milliseconds uint32) {
 	return binary.BigEndian.Uint32(p[8:12])
 }
+
 func (p ICMP6RouterAdvertisement) RetransmitTimer() (milliseconds uint32) {
 	return binary.BigEndian.Uint32(p[12:16])
 }
+
 func (p ICMP6RouterAdvertisement) Options() (NewOptions, error) {
 	if len(p) <= 16 {
 		return NewOptions{}, nil
 	}
 	return newParseOptions(p[16:])
 }
+
 func (p ICMP6RouterAdvertisement) String() string {
 	return Logger.Msg("").Struct(p).ToString()
 }
+
 func (p ICMP6RouterAdvertisement) FastLog(l *fastlog.Line) *fastlog.Line {
 	l.String("type", "ra")
 	l.Uint8("code", p.Code())
@@ -293,6 +299,7 @@ func (p ICMP6NeighborAdvertisement) Override() bool  { return (p[4] & 0x20) != 0
 func (p ICMP6NeighborAdvertisement) TargetAddress() netip.Addr {
 	return netip.AddrFrom16(*((*[16]byte)(net.IP(p[8:24]))))
 }
+
 func (p ICMP6NeighborAdvertisement) TargetLLA() net.HardwareAddr {
 	// TargetLLA option
 	if len(p) < 32 || p[24] != 2 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
@@ -352,6 +359,7 @@ func (p ICMP6NeighborSolicitation) TargetAddress() netip.Addr {
 	ip, _ := netip.AddrFromSlice(p[8:24])
 	return ip
 }
+
 func (p ICMP6NeighborSolicitation) SourceLLA() net.HardwareAddr {
 	// SourceLLA option
 	if len(p) < 32 || p[24] != 1 || p[25] != 1 { // Option type TargetLLA, len 8 bytes
@@ -406,6 +414,7 @@ func (p ICMP6Redirect) TargetLinkLayerAddr() net.HardwareAddr {
 	}
 	return net.HardwareAddr(p[42 : 42+6])
 }
+
 func (p ICMP6Redirect) String() string {
 	return fmt.Sprintf("type=na code=%d targetIP=%s targetMAC=%s dstIP=%s", p.Code(), p.TargetAddress(), p.TargetLinkLayerAddr(), p.DstAddress())
 }
@@ -604,34 +613,4 @@ func (h *Session) ping(srcAddr Addr, dstAddr Addr, timeout time.Duration) (err e
 		return ErrTimeout
 	}
 	return nil
-}
-
-// ValidateDefaultRouter validates the default route is pointing to us by pinging
-// client using home router IP as source IP. The reply will come to us
-// when the default route on client is netfilter. If not, the ping
-// reply will not be received.
-//
-// Note: the reply will also come to us if the client is undergoing
-// an arp attack (hunt).
-func (h *Session) ValidateDefaultRouter(addr Addr) error {
-	// Test if client is online first
-	// If client does not respond to echo, there is little we can test
-	if err := h.Ping(addr, time.Second*2); err != nil {
-		Logger.Msg("not responding to ping").Struct(addr).Write()
-		return ErrTimeout
-	}
-
-	// first attempt
-	err := h.ping(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
-	if err == nil {
-		return nil
-	}
-
-	// second attempt
-	err = h.ping(Addr{MAC: h.NICInfo.HostAddr4.MAC, IP: h.NICInfo.RouterAddr4.IP}, addr, time.Second*2)
-	if err == nil {
-		return nil
-	}
-
-	return ErrNotRedirected
 }

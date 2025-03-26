@@ -219,13 +219,6 @@ func (config Config) NewSession(nic string) (session *Session, err error) {
 	host.Online = true
 	host.MACEntry.Online = true
 
-	// create the router entry manually and set router flag
-	host, _ = session.findOrCreateHostWithLock(session.NICInfo.RouterAddr4)
-	host.MACEntry.IsRouter = true
-	host.MACEntry.IP4 = host.Addr.IP
-	host.Online = true
-	host.MACEntry.Online = true
-
 	return session, nil
 }
 

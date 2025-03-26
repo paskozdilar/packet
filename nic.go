@@ -23,19 +23,15 @@ import (
 
 // NICInfo stores the network interface info
 type NICInfo struct {
-	IFI          *net.Interface
-	HomeLAN4     netip.Prefix // IPv4: home LAN netmask
-	HostAddr4    Addr         // IPv4: host MAC and IPv4
-	RouterAddr4  Addr         // IPv4: router MAC and IPv4
-	HostLLA      netip.Prefix // IPv6: host LLA
-	HostGUA      netip.Prefix // IPv6: host GUA
-	RouterLLA    netip.Prefix // IPv6: router LLA
-	RouterGUA    netip.Prefix // IPv6: router GUA
-	RouterPrefix net.IP       // IPv6: router prefix
+	IFI       *net.Interface
+	HomeLAN4  netip.Prefix // IPv4: home LAN netmask
+	HostAddr4 Addr         // IPv4: host MAC and IPv4
+	HostLLA   netip.Prefix // IPv6: host LLA
+	HostGUA   netip.Prefix // IPv6: host GUA
 }
 
 func (e NICInfo) String() string {
-	return fmt.Sprintf("mac=%s homeLAN=%s hostip4=%s lla=%s gua=%s routerIP4=%s routerMAC=%s", e.HostAddr4.MAC, e.HomeLAN4, e.HostAddr4.IP, e.HostLLA, e.HostGUA, e.RouterAddr4.IP, e.RouterAddr4.MAC)
+	return fmt.Sprintf("mac=%s homeLAN=%s hostip4=%s lla=%s gua=%s", e.HostAddr4.MAC, e.HomeLAN4, e.HostAddr4.IP, e.HostLLA, e.HostGUA)
 }
 
 // CopyIP simply copies the IP to a new buffer
@@ -119,11 +115,6 @@ func GetNICInfo(nic string) (info *NICInfo, err error) {
 		Logger.Msg("warning host IP is different than default outbound IP").IP("hostIP", info.HostAddr4.IP).IP("defaultIP", defaultIP).Write()
 	}
 
-	defaultGW, err := GetIP4DefaultGatewayAddr(nic)
-	if err != nil {
-		return nil, err
-	}
-	info.RouterAddr4 = Addr{MAC: defaultGW.MAC, IP: defaultGW.IP}
 	info.HostAddr4 = Addr{MAC: info.IFI.HardwareAddr, IP: info.HostAddr4.IP}
 	return info, nil
 }
@@ -151,10 +142,10 @@ const (
 // GetLinuxDefaultGateway read the default gateway from linux route file
 //
 // file: /proc/net/route file:
-//   Iface   Destination Gateway     Flags   RefCnt  Use Metric  Mask
-//   eth0    00000000    C900A8C0    0003    0   0   100 00000000    0   00
-//   eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 //
+//	Iface   Destination Gateway     Flags   RefCnt  Use Metric  Mask
+//	eth0    00000000    C900A8C0    0003    0   0   100 00000000    0   00
+//	eth0    0000A8C0    00000000    0001    0   0   100 00FFFFFF    0   00
 func GetLinuxDefaultGateway() (gw netip.Addr, err error) {
 	file, err := os.Open(file)
 	if err != nil {
@@ -188,11 +179,11 @@ func GetLinuxDefaultGateway() (gw netip.Addr, err error) {
 // LoadLinuxARPTable read arp entries from linux proc file
 //
 // /proc/net/arp format:
-//   IP address       HW type     Flags       HW address            Mask     Device
-//   192.168.0.1      0x1         0x2         20:0c:c8:23:f7:1a     *        eth0
-//   192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
-//   192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 //
+//	IP address       HW type     Flags       HW address            Mask     Device
+//	192.168.0.1      0x1         0x2         20:0c:c8:23:f7:1a     *        eth0
+//	192.168.0.4      0x1         0x2         4c:bb:58:f4:b2:d7     *        eth0
+//	192.168.0.5      0x1         0x2         84:b1:53:ea:1f:40     *        eth0
 func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 	const name = "/proc/net/arp"
 
@@ -231,38 +222,6 @@ func LoadLinuxARPTable(nic string) (list []Addr, err error) {
 	}
 
 	return list, nil
-}
-
-// GetIP4DefaultGatewayAddr return the IP4 default gatewy for nic
-func GetIP4DefaultGatewayAddr(nic string) (addr Addr, err error) {
-
-	if addr.IP, err = GetLinuxDefaultGateway(); err != nil {
-		fmt.Println("error getting router ", err)
-		return Addr{}, ErrInvalidIP
-	}
-
-	// Try 3 times to read arp table
-	// This is required if we just reset the interface and the arp table is nil
-	var arpList []Addr
-	for i := 0; i < 3; i++ {
-		ExecPing(addr.IP.String()) // ping to populate arp table
-		time.Sleep(time.Millisecond * 15)
-		arpList, err = LoadLinuxARPTable(nic)
-		if err == nil {
-			// search in table; if the arp entry is not yeet complete, the mac will be zero or wont exist
-			for _, v := range arpList {
-				if v.IP == addr.IP {
-					addr.MAC = v.MAC
-					break
-				}
-			}
-		}
-	}
-	if addr.MAC == nil {
-		return Addr{}, fmt.Errorf("default gw mac not found on interface")
-	}
-
-	return addr, nil
 }
 
 func EnableIP4Forwarding(nic string) error {
